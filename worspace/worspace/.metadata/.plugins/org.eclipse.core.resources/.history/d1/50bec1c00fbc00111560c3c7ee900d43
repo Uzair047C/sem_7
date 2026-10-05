@@ -1,0 +1,79 @@
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/adc.h"
+#include "driver/gpio.h"
+#include "esp_adc_cal.h"
+
+
+#define DEFAULT_VREF     1100                 // mV
+#define NO_OF_SAMPLES    32                   // multiple conversions for averaging
+#define ADC_WIDTH        ADC_WIDTH_BIT_12
+
+#define SET_CHANNEL      ADC1_CHANNEL_1       // preset (potentiometer) -> GPIO37
+#define LM35_CHANNEL     ADC1_CHANNEL_2       // LM35 sensor            -> GPIO38
+
+#define SET_ATTEN        ADC_ATTEN_DB_12      // pot swings 0 to 3.3 V -> full range
+#define LM35_ATTEN       ADC_ATTEN_DB_0       // LM35 is < 1.1 V -> best resolution
+
+
+#define PRESET_MAX_C     100.0f
+
+#define LED_PIN          GPIO_NUM_2           // on-board LED
+
+static esp_adc_cal_characteristics_t lm35_chars;
+
+void delay_ms(unsigned int ms)
+{
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+
+uint32_t ADC_result(adc1_channel_t channel, uint8_t samples)
+{
+    uint32_t sum = 0;
+    for (uint8_t i = 0; i < samples; i++) {
+        sum += adc1_get_raw(channel);
+    }
+    return sum / samples;
+}
+
+void app_main(void)
+{
+    // ADC1 initialization
+    adc1_config_width(ADC_WIDTH);
+    adc1_config_channel_atten(SET_CHANNEL,  SET_ATTEN);
+    adc1_config_channel_atten(LM35_CHANNEL, LM35_ATTEN);
+
+    // Calibration profile for the LM35 channel
+    esp_adc_cal_characterize(ADC_UNIT_1, LM35_ATTEN, ADC_WIDTH, DEFAULT_VREF, &lm35_chars);
+
+    // LED initialization
+    gpio_reset_pin(LED_PIN);
+    gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(LED_PIN, 0);
+
+    for (;;) {
+        // 1) Pre-set temperature from potentiometer (channel 1)
+        uint32_t set_raw = ADC_result(SET_CHANNEL, NO_OF_SAMPLES);
+        float preset_c   = (set_raw * PRESET_MAX_C) / 4095.0f;
+
+        // 2) Measured temperature from LM35 (channel 2), averaged
+        uint32_t lm_raw  = ADC_result(LM35_CHANNEL, NO_OF_SAMPLES);
+        uint32_t lm_mv   = esp_adc_cal_raw_to_voltage(lm_raw, &lm35_chars);
+        float temp_c     = lm_mv / 10.0f;         // LM35: 10 mV per C
+
+        // 3) Compare and drive LED
+        if (temp_c > preset_c) {
+            gpio_set_level(LED_PIN, 1);           // above preset -> ON
+        } else {
+            gpio_set_level(LED_PIN, 0);           // otherwise    -> OFF
+        }
+
+        printf("Preset: %.1f C | Temp: %.1f C (%lu mV) | LED: %s\n",
+               preset_c, temp_c, (unsigned long)lm_mv,
+               (temp_c > preset_c) ? "ON" : "OFF");
+
+        delay_ms(300);
+    }
+}

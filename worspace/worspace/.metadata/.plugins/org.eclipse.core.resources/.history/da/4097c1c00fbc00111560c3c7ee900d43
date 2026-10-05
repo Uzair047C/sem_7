@@ -1,0 +1,71 @@
+#include <stdio.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/adc.h"
+#include "driver/gpio.h"
+#include "esp_adc_cal.h"
+
+
+#define PRESET_TEMP_C      30.0f            // software pre-set temperature (°C)
+
+#define DEFAULT_VREF       1100             // mV
+#define NO_OF_SAMPLES      16               // multisampling for a stable reading
+#define ADC_CHANNEL        ADC2_CHANNEL_0   // GPIO4 (ADC2_CH0)
+#define ADC_ATTEN          ADC_ATTEN_DB_0   // ~0 to 1.1 V range
+#define ADC_WIDTH          ADC_WIDTH_BIT_12
+
+
+#define LED_PIN            GPIO_NUM_2       // on-board LED
+
+static esp_adc_cal_characteristics_t adc_chars;
+
+void delay_ms(unsigned int ms)
+{
+    vTaskDelay(pdMS_TO_TICKS(ms));
+}
+
+
+uint32_t ADC_result(uint8_t samples)
+{
+    uint32_t sum = 0;
+    int raw = 0;
+    uint8_t valid = 0;
+
+    for (uint8_t i = 0; i < samples; i++) {
+        if (adc2_get_raw(ADC_CHANNEL, ADC_WIDTH, &raw) == ESP_OK) {
+            sum += raw;
+            valid++;
+        }
+    }
+    return (valid > 0) ? (sum / valid) : 0;
+}
+
+void app_main(void)
+{
+    // ADC2 initialisation
+    adc2_config_channel_atten(ADC_CHANNEL, ADC_ATTEN);
+    esp_adc_cal_characterize(ADC_UNIT_2, ADC_ATTEN, ADC_WIDTH, DEFAULT_VREF, &adc_chars);
+
+    // LED initialisation
+    gpio_reset_pin(LED_PIN);
+    gpio_set_direction(LED_PIN, GPIO_MODE_OUTPUT);
+    gpio_set_level(LED_PIN, 0);
+
+    for (;;) {
+        uint32_t raw = ADC_result(NO_OF_SAMPLES);
+        uint32_t mv  = esp_adc_cal_raw_to_voltage(raw, &adc_chars);  // calibrated mV
+        float temp_c = mv / 10.0f;                                   // LM35: 10 mV per °C
+
+        if (temp_c > PRESET_TEMP_C) {
+            gpio_set_level(LED_PIN, 1);   // above pre-set -> LED ON
+        } else {
+            gpio_set_level(LED_PIN, 0);   // otherwise -> LED OFF
+        }
+
+        printf("Raw: %lu | Voltage: %lu mV | Temp: %.1f C | Preset: %.1f C | LED: %s\n",
+               (unsigned long)raw, (unsigned long)mv, temp_c, PRESET_TEMP_C,
+               (temp_c > PRESET_TEMP_C) ? "ON" : "OFF");
+
+        delay_ms(500);
+    }
+}

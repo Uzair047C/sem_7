@@ -1,0 +1,17 @@
+vendor_name = ModelSim
+source_file = 1, D:/sem_7/dsd/lab/lab1/bitadder.vhd
+source_file = 1, D:/sem_7/dsd/lab/lab1/adder4a.vhd
+source_file = 1, D:/sem_7/dsd/lab/lab1/Waveform.vwf
+source_file = 1, D:/sem_7/dsd/lab/lab1/db/bitadder.cbx.xml
+source_file = 1, d:/quartus/quartus/libraries/vhdl/ieee/prmtvs_b.vhd
+source_file = 1, d:/quartus/quartus/libraries/vhdl/ieee/prmtvs_p.vhd
+source_file = 1, d:/quartus/quartus/libraries/vhdl/ieee/timing_b.vhd
+source_file = 1, d:/quartus/quartus/libraries/vhdl/ieee/timing_p.vhd
+design_name = bitadder
+instance = comp, \sum~output , sum~output, bitadder, 1
+instance = comp, \cout~output , cout~output, bitadder, 1
+instance = comp, \B~input , B~input, bitadder, 1
+instance = comp, \A~input , A~input, bitadder, 1
+instance = comp, \C~input , C~input, bitadder, 1
+instance = comp, \sum~0 , sum~0, bitadder, 1
+instance = comp, \cout~0 , cout~0, bitadder, 1
